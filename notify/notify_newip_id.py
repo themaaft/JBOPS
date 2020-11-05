@@ -13,10 +13,6 @@ Arguments passed from Tautulli
 -sn {show_name} -ena {episode_name} -ssn {season_num00} -enu {episode_num00} -srv {server_name} -med {media_type}
 -pos {poster_url} -tt {title} -sum {summary} -lbn {library_name} -ip {ip_address} -us {user} -uid {user_id}
 -pf {platform} -pl {player} -da {datestamp} -ti {timestamp} -mid {machine_id} -ntype [notification ID] - mtype [plain/html]
-
-This script is a modded version of notify_newip.py - it will also let you knopw if the machine ID is new, so you know if its a new IP address and a new client device
-you need the package sqlite3 installed. Also the notification ID (ntype) is now sent from tautulli and you can send the message format (mtype) plain or hmtl i have added this
-change because i wanted the same script for sending an email and to slack. Slack doesnt like HTML messages.
 """
 
 
@@ -25,12 +21,10 @@ from builtins import object
 import argparse
 import requests
 import sys
-import sqlite3 as db
 
 # ## EDIT THESE SETTINGS ##
 TAUTULLI_APIKEY = '' # Your Tautulli API key
 TAUTULLI_URL = 'http://localhost:8181/' # Your Tautulli URL
-DB_FILE = '/opt/tautulli/tautulli.db' # location of tautulli DB file
 
 
 # Replace LAN IP addresses that start with the LAN_SUBNET with a WAN IP address
@@ -55,6 +49,20 @@ class UserEmail(object):
         self.user_id = data.get('user_id', 'N/A')
         self.user_thumb = data.get('user_thumb', 'N/A')
 
+
+def get_db_list(check_mid=''):
+    """Get the machine IDs from DB"""
+    payload = {'apikey': TAUTULLI_APIKEY,
+               'cmd': 'sql',
+               'query': 'SELECT DISTINCT machine_id FROM session_history WHERE machine_id="' + check_mid + '"'}
+    r = requests.get(TAUTULLI_URL.rstrip('/') + '/api/v2', params=payload)
+    response = r.json()
+    data = response['response']['data']
+    try:
+        gotdata = data[0]
+        return "no"
+    except IndexError:
+        return "yes"
 
 def get_user_ip_addresses(user_id='', ip_address=''):
     """Get the user IP list from Tautulli."""
@@ -208,16 +216,7 @@ if __name__ == '__main__':
     p = parser.parse_args()
 
 
-    conn = db.connect(DB_FILE)
-    conn.row_factory = lambda cursor, row: row[0]
-    c = conn.cursor()
-    ids = c.execute('SELECT DISTINCT machine_id FROM session_history').fetchall()
-
-    if p.machine_id in ids:
-        new_id = "No"
-    else:
-        new_id = "Yes"
-    print new_id
+    m_id = get_db_list(check_mid=p.machine_id)
 
     if p.msg_type == "plain":
         SUBJECT_TEXT = "New IP has been detected using Plex."
@@ -228,27 +227,27 @@ if __name__ == '__main__':
             On {p.platform}[{p.player}]
             Location: {g.city}, {g.country} {g.postal_code}
             at {p.timestamp} on {p.datestamp}
-            New Device: """ + new_id + """
+            New Device: """ + m_id + """
             Machine ID: {p.machine_id}
         """
     else:
         SUBJECT_TEXT = "New IP has been detected using Plex."
         BODY_TEXT = """\
         <html>
-        <head></head>
-        <body>
-        <p>Hi!<br>
-        <br><a href="mailto:{u.email}"><img src="{u.user_thumb}" alt="Poster unavailable" height="50" width="50"></a>
-        {p.user} has watched {p.media_type}:{p.title} from a new IP address: {p.ip_address}<br>
-        <br>On {p.platform}[{p.player}] in
-        <a href="http://maps.google.com/?q={g.city},{g.country},{g.postal_code}">{g.city}, {g.country} {g.postal_code}</a>
-        at {p.timestamp} on {p.datestamp}<br>
-        <br>New Device: """ + new_id + """<br>
-        <br>Machine ID: {p.machine_id}<br>
-        <br><br>
-        <br>User email is: {u.email}<br>
-        </p>
-        </body>
+            <head></head>
+                <body>
+                    <p>Hi!<br>
+                    <br><a href="mailto:{u.email}"><img src="{u.user_thumb}" alt="Poster unavailable" height="50" width="50"></a>
+                    {p.user} has watched {p.media_type}:{p.title} from a new IP address: {p.ip_address}<br>
+                    <br>On {p.platform}[{p.player}] in
+                    <a href="http://maps.google.com/?q={g.city},{g.country},{g.postal_code}">{g.city}, {g.country} {g.postal_code}</a>
+                    at {p.timestamp} on {p.datestamp}<br>
+                    <br>New Device: """ + m_id + """<br>
+                    <br>Machine ID: {p.machine_id}<br>
+                    <br><br>
+                    <br>User email is: {u.email}<br>
+                    </p>
+                </body>
         </html>
         """
 
@@ -257,7 +256,6 @@ if __name__ == '__main__':
             ip_address = REPLACEMENT_WAN_IP
         else:
             ip_address = p.ip_address
-
         g = get_geoip_info(ip_address=ip_address)
         u = get_user_email(user_id=p.user_id)
         get_user_ip_addresses(user_id=p.user_id, ip_address=p.ip_address)
