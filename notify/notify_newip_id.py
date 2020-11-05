@@ -13,6 +13,8 @@ Arguments passed from Tautulli
 -sn {show_name} -ena {episode_name} -ssn {season_num00} -enu {episode_num00} -srv {server_name} -med {media_type}
 -pos {poster_url} -tt {title} -sum {summary} -lbn {library_name} -ip {ip_address} -us {user} -uid {user_id}
 -pf {platform} -pl {player} -da {datestamp} -ti {timestamp} -mid {machine_id} -ntype [notification ID] - mtype [plain/html]
+
+set "api_sql = 1" in the config.ini file
 """
 
 
